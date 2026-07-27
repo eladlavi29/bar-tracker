@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bar Table Tracker</title>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --card-bg: #1e1e1e;
+            --text-color: #e0e0e0;
+            --accent-available: #2e7d32;
+            --accent-occupied: #c62828;
+            --button-bg: #333333;
+            --button-text: #ffffff;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 16px;
+            box-sizing: border-box;
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
+        button {
+            background-color: var(--button-bg);
+            color: var(--button-text);
+            border: none;
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 16px;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            min-height: 120px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            border-top: 6px solid var(--accent-available);
+            transition: border-color 0.3s ease;
+        }
+
+        .card.occupied {
+            border-top-color: var(--accent-occupied);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+
+        .status {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            opacity: 0.8;
+        }
+
+        .card-body {
+            margin-top: 12px;
+            font-size: 0.85rem;
+        }
+
+        .time-info {
+            margin-bottom: 4px;
+        }
+
+        .time-input {
+            background: transparent;
+            border: 1px solid #444;
+            color: #fff;
+            padding: 2px 4px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            width: 100%;
+            box-sizing: border-box;
+            margin-top: 4px;
+        }
+
+        .actions {
+            margin-top: 12px;
+        }
+
+        .actions button {
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Bar Table Tracker</h1>
+
+    <div class="controls">
+        <button onclick="addTable()">+ Add Table</button>
+        <button onclick="resetAll()">Reset All</button>
+    </div>
+
+    <div class="grid" id="tablesContainer"></div>
+
+    <script>
+        let tables = JSON.parse(localStorage.getItem('bar_tables')) || [
+            { id: 1, name: "Table 1", occupied: false, startTime: null },
+            { id: 2, name: "Table 2", occupied: false, startTime: null },
+            { id: 3, name: "Table 3", occupied: false, startTime: null },
+            { id: 4, name: "Table 4", occupied: false, startTime: null }
+        ];
+
+        function saveState() {
+            localStorage.setItem('bar_tables', JSON.stringify(tables));
+            render();
+        }
+
+        function formatTime(isoString) {
+            if (!isoString) return "--:--";
+            const date = new Date(isoString);
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+
+        function getDuration(isoString) {
+            if (!isoString) return "";
+            const start = new Date(isoString);
+            const now = new Date();
+            const diffMs = now - start;
+            const diffMins = Math.floor(diffMs / 60000);
+            const hrs = Math.floor(diffMins / 60);
+            const mins = diffMins % 60;
+            return hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+        }
+
+        function toggleTable(id) {
+            const table = tables.find(t => t.id === id);
+            if (!table) return;
+
+            if (table.occupied) {
+                const duration = getDuration(table.startTime);
+                alert(`${table.name} cleared. Total time: ${duration}`);
+                table.occupied = false;
+                table.startTime = null;
+            } else {
+                table.occupied = true;
+                table.startTime = new Date().toISOString();
+            }
+            saveState();
+        }
+
+        function updateStartTime(id, newTimeString) {
+            const table = tables.find(t => t.id === id);
+            if (!table || !newTimeString) return;
+
+            const [hours, minutes] = newTimeString.split(':');
+            const now = new Date();
+            now.setHours(hours, minutes, 0, 0);
+
+            table.startTime = now.toISOString();
+            saveState();
+        }
+
+        function addTable() {
+            const newId = tables.length > 0 ? Math.max(...tables.map(t => t.id)) + 1 : 1;
+            tables.push({ id: newId, name: `Table ${newId}`, occupied: false, startTime: null });
+            saveState();
+        }
+
+        function resetAll() {
+            if (confirm("Reset all tables to available?")) {
+                tables.forEach(t => {
+                    t.occupied = false;
+                    t.startTime = null;
+                });
+                saveState();
+            }
+        }
+
+        function render() {
+            const container = document.getElementById('tablesContainer');
+            container.innerHTML = '';
+
+            tables.forEach(table => {
+                const card = document.createElement('div');
+                card.className = `card ${table.occupied ? 'occupied' : ''}`;
+
+                let timeInputVal = "";
+                if (table.startTime) {
+                    const d = new Date(table.startTime);
+                    timeInputVal = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+                }
+
+                card.innerHTML = `
+                    <div class="card-header">
+                        <span>${table.name}</span>
+                        <span class="status">${table.occupied ? 'Occupied' : 'Open'}</span>
+                    </div>
+                    <div class="card-body">
+                        ${table.occupied ? `
+                            <div class="time-info">Seated: ${formatTime(table.startTime)}</div>
+                            <div class="time-info">Duration: ${getDuration(table.startTime)}</div>
+                            <input type="time" class="time-input" value="${timeInputVal}" onchange="updateStartTime(${table.id}, this.value)">
+                        ` : 'Tap below to seat guests.'}
+                    </div>
+                    <div class="actions">
+                        <button onclick="toggleTable(${table.id})">
+                            ${table.occupied ? 'Clear Table' : 'Seat Guests'}
+                        </button>
+                    </div>
+                `;
+
+                container.appendChild(card);
+            });
+        }
+
+        setInterval(render, 30000); // Auto-refresh durations every 30s
+        render();
+    </script>
+</body>
+</html>
